@@ -1,17 +1,21 @@
 # ESP32-CAM Telegram Baby Monitor
 
-This module allows you to capture photos from an ESP32-CAM and receive them via Telegram bot.
+High-performance baby monitor using ESP32-CAM with Telegram bot integration. Optimized for fast response times (2-3 seconds) with LED flash support.
 
 ## Hardware Required
-- ESP32-CAM (AI-Thinker) with OV2640 camera
-- FTDI programmer or ESP32-CAM-MB programmer board for flashing
+- **ESP32-CAM-MB** development board
+- **OV3660** camera sensor (1600×1200 max resolution)
+- **8MB PSRAM** minimum
+- **4MB Flash** memory
+- **GPIO4** LED flash (built-in)
 
 ## Features
-- 📸 VGA resolution (640x480) photos
-- 📱 Telegram bot integration
-- 👨‍👩‍👧‍👦 Multi-user support (family members can all use it)
-- 🔄 On-demand photo capture with `/photo` command
-- 📶 Auto-reconnect WiFi
+- 📸 **Fast Photo Capture**: 2-3 second response time (flash + capture + upload)
+- 💬 **Telegram Bot Commands**: /start, /photo, /help, /flash on/off
+- 🔦 **LED Flash Control**: 800ms optimal exposure timing
+- ⚡ **Performance Optimized**: WiFi power save disabled, buffer overflow protection
+- 🎨 **XGA Resolution**: 1024×768 for speed/quality balance (23-120KB images)
+- 🛡️ **Error Handling**: User-friendly messages and retry logic
 
 ## Setup Instructions
 
@@ -19,78 +23,169 @@ This module allows you to capture photos from an ESP32-CAM and receive them via 
 - Connect your ESP32-CAM to the programmer board
 - Make sure the camera module is properly seated
 
-### 2. Build and Flash
+### 2. Configure Credentials
 
-First, activate ESP-IDF environment:
+**⚠️ IMPORTANT - Credentials Setup:**
+
+Copy the example secrets file:
 ```bash
-cd baby-monitor
-source setup-esp-idf.sh
+cp main/secrets.h.example main/secrets.h
 ```
 
-Then build and flash:
+Edit `main/secrets.h` with your settings:
+```c
+#define WIFI_SSID "your_wifi_ssid"
+#define WIFI_PASSWORD "your_wifi_password"
+#define TELEGRAM_BOT_TOKEN "your_bot_token_from_botfather"
+#define TELEGRAM_CHAT_ID "your_chat_id"
+```
+
+**Getting Telegram Credentials:**
+1. Create bot with [@BotFather](https://t.me/botfather) using `/newbot`
+2. Copy the bot token (format: `1234567890:ABCdefGHIjklMNOpqrsTUVwxyz`)
+3. Get your chat_id from [@userinfobot](https://t.me/userinfobot)
+
+### 3. Build and Flash
+
+### 3. Build and Flash
+
+Set up ESP-IDF environment:
 ```bash
-cd esp32-cam-telegram
-idf.py set-target esp32
+. $HOME/esp/esp-idf/export.sh
+```
+
+Build and flash:
+```bash
 idf.py build
-idf.py -p /dev/cu.usbserial-* flash monitor
+idf.py -p /dev/cu.usbserial-110 flash monitor
 ```
 
-Replace `/dev/cu.usbserial-*` with your actual serial port.
+Replace `/dev/cu.usbserial-110` with your actual serial port.
 
-### 3. Using the Bot
+### 4. Using the Bot
 
-1. Open Telegram and search for your bot (the one with token you created)
-2. Send `/start` to begin
-3. Send `/photo` to receive a photo from the camera
-4. All family members can add the bot and use it!
+1. Open Telegram and search for your bot
+2. Send `/start` to see available commands
+3. Send `/photo` to receive a photo (2-3 seconds)
+4. Use `/flash on` or `/flash off` to control LED
+5. Send `/help` anytime to see commands and flash status
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Show welcome message and available commands |
+| `/photo` | Take a photo (2-3 seconds response time) |
+| `/flash on` | Enable LED flash for photos |
+| `/flash off` | Disable LED flash |
+| `/help` | Show available commands and flash status |
+
+## Performance Metrics
+
+Actual measured performance:
+- **Flash Duration**: 800ms (optimal for auto-exposure)
+- **Capture Time**: 2-190ms (lighting dependent)
+- **Upload Time**: 1-2 seconds (23-120KB images)
+- **Total Response**: 2-3 seconds end-to-end
 
 ## Configuration
 
-WiFi and Telegram credentials are in `main/main.c`:
-- WIFI_SSID: 
-- WIFI_PASS: 
-- TELEGRAM_BOT_TOKEN: "7209354818:AAE33MWSO8Yg2XLEb97-I30sAMODrD2pLko"
+Credentials are stored in `main/secrets.h` (not tracked by git for security).
+
+Current camera settings (in main.c):
+```c
+Resolution: FRAMESIZE_XGA (1024×768)
+JPEG Quality: 8
+Denoise: 1 (fast)
+Contrast: 2
+Saturation: 2
+Sharpness: 3
+WiFi Power Save: Disabled (for speed)
+```
 
 ## Troubleshooting
 
-### Camera not working
+### Photos not received
+- Check WiFi credentials in `secrets.h`
+- Verify Telegram bot token is correct
+- Ensure chat_id matches your Telegram user ID
+- Check serial monitor for errors
+
+### Camera initialization failed
 - Check camera ribbon cable connection
-- Ensure OV2640 is properly detected in logs
+- Verify OV3660 sensor is detected in logs
+- Ensure 8MB PSRAM is available
+- Try power cycling the ESP32-CAM
 
 ### WiFi connection issues
-- Verify SSID and password are correct
+- Verify SSID and password in `secrets.h`
 - Check WiFi signal strength
-- Make sure router is 2.4GHz (ESP32 doesn't support 5GHz)
+- Ensure router is 2.4GHz (ESP32 doesn't support 5GHz)
+- Look for "Connected! IP Address" in serial monitor
 
-### Telegram not responding
-- Verify bot token is correct
-- Check internet connectivity
-- Look at serial monitor for error messages
+### Slow upload times
+- WiFi power save is automatically disabled
+- Check WiFi signal strength
+- Reduce JPEG quality (increase quality number) if needed
 
-### Photo quality issues
-- Adjust `jpeg_quality` in camera_init() (lower = better quality, but larger file)
-- Change `frame_size` for different resolutions
+### Images too dark with flash
+- Flash duration is set to 800ms (tested optimal)
+- For far distances in low light, increase to 1000-1500ms in main.c
+- Edit around line 467: `vTaskDelay(pdMS_TO_TICKS(800));`
+
+### Buffer overflow (FB-OVF) errors
+- Code automatically flushes stale frames
+- If still occurring, increase stabilization delay at line 462
+
+## Security Notes
+
+⚠️ **IMPORTANT - Keep Your Credentials Safe:**
+- **Never commit `secrets.h`** - It contains sensitive credentials
+- Keep your Telegram bot token private
+- The `.gitignore` file protects `secrets.h` from git
+- Consider making your GitHub repository private
+- Use `secrets.h.example` as template, never put real credentials there
 
 ## Serial Monitor Output
 
 You should see:
 ```
 I (xxx) ESP32-CAM-TELEGRAM: ESP32-CAM Telegram Baby Monitor Starting...
-I (xxx) ESP32-CAM-TELEGRAM: OV2640 camera detected
+I (xxx) ESP32-CAM-TELEGRAM: OV3660 camera detected
 I (xxx) ESP32-CAM-TELEGRAM: Camera initialized successfully
 I (xxx) ESP32-CAM-TELEGRAM: Connected! IP Address:192.168.x.x
 I (xxx) ESP32-CAM-TELEGRAM: WiFi connected successfully!
-I (xxx) ESP32-CAM-TELEGRAM: Bot is ready! Send /photo command in Telegram to get a photo.
+I (xxx) ESP32-CAM-TELEGRAM: Bot is ready! Send /photo command
+
+[PERF] Command received at 12345 ms
+[PERF] Starting capture at 13145 ms
+[PERF] Capture complete at 13147 ms
+[PERF] Starting photo upload at 13150 ms
+[PERF] Photo upload complete at 14212 ms
 ```
 
-## Commands
+## Technical Details
 
-- `/start` - Start the bot
-- `/photo` - Capture and receive a photo
+### WiFi Optimization
+- Power save disabled: `esp_wifi_set_ps(WIFI_PS_NONE)`
+- Reduces latency by ~50%
 
-## Notes
+### Buffer Management
+- Automatic stale frame flushing before capture
+- Prevents FB-OVF (framebuffer overflow) errors
+- 100ms stabilization delay
 
-- The bot polls Telegram every 30 seconds for new messages
-- Photos are captured at VGA resolution (640x480)
-- JPEG quality is set to 12 (good balance between quality and file size)
-- Multiple users can use the bot simultaneously
+### Flash Control
+- GPIO4 output mode
+- 800ms duration for optimal exposure
+- Auto-exposure enabled for adaptive lighting
+
+## License
+
+MIT License - Free to use and modify
+
+## Credits
+
+Built with ESP-IDF v5.3.4:
+- `espressif/esp32-camera` v2.1.4
+- `espressif/esp_jpeg` for JPEG handling
