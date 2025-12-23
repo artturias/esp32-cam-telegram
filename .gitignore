@@ -1,0 +1,21 @@
+# Build artifacts
+build/
+sdkconfig.old
+*.o
+*.a
+*.elf
+*.bin
+*.map
+
+# IDE
+.vscode/
+.idea/
+
+# Dependencies
+managed_components/.component_hash
+
+# Logs
+*.log
+
+# Secrets - DO NOT COMMIT
+main/secrets.h
